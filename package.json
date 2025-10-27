@@ -12,7 +12,8 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:coverage:open": "jest --coverage && open coverage/index.html",
-    "format": "prettier -w ."
+    "format": "prettier -w .",
+    "demo:rfq": "ts-node scripts/rfq-demo.ts"
   },
   "author": "iLayer",
   "keywords": [

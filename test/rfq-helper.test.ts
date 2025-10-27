@@ -1,119 +1,158 @@
-import Pusher, { Channel } from "pusher-js";
-import { iLayerRfqHelper } from "../src/index";
-import { RfqRequest, RfqResponse } from "../src/types";
+import Pusher from "pusher-js";
+import { iLayerRfqHelper } from "../src/modules/rfq";
+import { RfqQuoteRequestPayload, RfqQuoteResponsePayload } from "../src/types";
+
+type MockChannel = {
+  bind: jest.Mock;
+  unbind: jest.Mock;
+  trigger: jest.Mock;
+  emit: (event: string, payload: unknown) => void;
+};
 
 jest.mock("pusher-js");
 
 describe("iLayerRfqHelper", () => {
-  let mockChannel: jest.Mocked<Channel>;
-  let mockDisconnect: jest.Mock;
-  let helper: iLayerRfqHelper;
-  const USER_ID = "0xtestuser";
+  const channels = new Map<string, MockChannel>();
+  let subscribeMock: jest.Mock;
+  let unsubscribeMock: jest.Mock;
+  let disconnectMock: jest.Mock;
+
+  const createChannel = (_name: string): MockChannel => {
+    const handlers = new Map<string, Set<(payload: unknown) => void>>();
+
+    const addHandler = (event: string, handler: (payload: unknown) => void) => {
+      const existing = handlers.get(event) ?? new Set();
+      existing.add(handler);
+      handlers.set(event, existing);
+      if (event === "pusher:subscription_succeeded") {
+        handler({});
+      }
+    };
+
+    return {
+      bind: jest.fn((event: string, handler: (payload: unknown) => void) => {
+        addHandler(event, handler);
+      }),
+      unbind: jest.fn((event: string, handler: (payload: unknown) => void) => {
+        const existing = handlers.get(event);
+        existing?.delete(handler);
+      }),
+      trigger: jest.fn((event: string, payload: unknown) => {
+        handlers.get(event)?.forEach((handler) => handler(payload));
+      }),
+      emit: (event: string, payload: unknown) => {
+        handlers.get(event)?.forEach((handler) => handler(payload));
+      },
+    };
+  };
 
   beforeEach(() => {
-    // Create a fresh channel stub for each test
-    mockChannel = {
-      bind: jest.fn(),
-      unbind: jest.fn(),
-      trigger: jest.fn(),
-    } as any;
+    channels.clear();
+    subscribeMock = jest.fn((name: string) => {
+      if (!channels.has(name)) {
+        channels.set(name, createChannel(name));
+      }
+      return channels.get(name);
+    });
+    unsubscribeMock = jest.fn((name: string) => {
+      channels.delete(name);
+    });
+    disconnectMock = jest.fn();
 
-    // Mock Pusher constructor to return an object that subscribes to our stub channel
-    mockDisconnect = jest.fn();
-    (Pusher as any).mockImplementation(() => ({
-      subscribe: jest.fn().mockReturnValue(mockChannel),
-      disconnect: mockDisconnect,
+    (Pusher as unknown as jest.Mock).mockImplementation(() => ({
+      subscribe: subscribeMock,
+      unsubscribe: unsubscribeMock,
+      disconnect: disconnectMock,
     }));
-
-    helper = new iLayerRfqHelper("dummyKey", "localhost", 6001, USER_ID);
   });
 
   afterEach(() => {
     jest.clearAllMocks();
-    jest.useRealTimers();
   });
 
-  it("should subscribe to 'rfq' channel and bind to user events", () => {
-    // subscribe called with 'rfq'
-    expect(
-      (Pusher as any).mock.results[0].value.subscribe,
-    ).toHaveBeenCalledWith("rfq");
-    // bind called with user ID channel
-    expect(mockChannel.bind).toHaveBeenCalledWith(
-      USER_ID,
-      expect.any(Function),
+  const helperOptions = {
+    key: "dummy-key",
+    host: "localhost",
+    port: 6001,
+    authEndpoint: "/auth",
+  };
+
+  const baseRequest: RfqQuoteRequestPayload = {
+    from: {
+      network: "arbitrum",
+      tokens: [{ address: "0xfrom", amount: "1000" }],
+    },
+    to: {
+      network: "base",
+      tokens: [{ address: "0xto", amount: "0" }],
+    },
+  };
+
+  it("publishes an RFQ request and resolves on quote", async () => {
+    const helper = new iLayerRfqHelper(helperOptions);
+    const statusSpy = jest.fn();
+
+    const quotePromise = helper.requestQuote(baseRequest, {
+      onStatus: statusSpy,
+    });
+
+    await Promise.resolve();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(subscribeMock).toHaveBeenCalledWith("private-rfq.broadcast");
+    const broadcast = channels.get("private-rfq.broadcast");
+    expect(broadcast).toBeDefined();
+    expect(broadcast!.trigger).toHaveBeenCalledWith(
+      "client-rfq.request",
+      expect.objectContaining({ bucket: expect.any(String) }),
     );
-  });
 
-  describe("sendOrder", () => {
-    const dummyRequest: RfqRequest = {
-      id: "test-id", // even though code ignores this, TS requires it
-      user: USER_ID,
-      recipient: "0xrecipient",
-      inputs: [],
-      sourceChainId: 1,
-      destinationChainId: 2,
-      sponsored: false,
-      primaryFillerDeadline: BigInt(0),
-      deadline: BigInt(0),
-      callRecipient: "0xcall",
-      callData: "0x",
-      callValue: BigInt(0),
+    const [, requestPayload] = broadcast!.trigger.mock.calls[0];
+    const bucket = (requestPayload as { bucket: string }).bucket;
+    const reply = channels.get(`private-rfq.${bucket}`);
+    expect(reply).toBeDefined();
+
+    const quotePayload: RfqQuoteResponsePayload = {
+      solver: "solver-bot",
+      from: {
+        network: "Arbitrum",
+        tokens: [{ address: "0xfrom", amount: 12345 }],
+      },
+      to: {
+        network: "Base",
+        tokens: [{ address: "0xto", amount: 6789 }],
+      },
     };
 
-    it("resolves when a matching response arrives", async () => {
-      // Make timestamp and random predictable
-      jest.spyOn(Date, "now").mockReturnValue(1000);
-      jest.spyOn(Math, "random").mockReturnValue(0.123456789);
+    reply!.emit("client-rfq.status", { stage: "quoting" });
+    expect(statusSpy).toHaveBeenCalledWith({ stage: "quoting" });
 
-      // Capture the user-bound callback
-      expect(mockChannel.bind).toHaveBeenCalledWith(
-        USER_ID,
-        expect.any(Function),
-      );
-      const userCallback = mockChannel.bind.mock.calls.find(
-        (call) => call[0] === USER_ID,
-      )![1];
+    reply!.emit("client-rfq.quote", quotePayload);
 
-      // Call sendOrder
-      const promise = helper.sendOrder(dummyRequest);
-      // Should trigger client-rfq-submit
-      expect(mockChannel.trigger).toHaveBeenCalledWith(
-        "client-rfq-submit",
-        dummyRequest,
-      );
-
-      // Construct expected orderId matching implementation
-      const expectedId = `order_1000_${Math.random().toString(36).substr(2, 9)}`;
-      // Simulate incoming server event
-      const responsePayload = { id: expectedId } as unknown as RfqResponse;
-      userCallback(responsePayload);
-
-      await expect(promise).resolves.toBe(responsePayload);
-    });
-
-    it("rejects with timeout error after 30s", async () => {
-      jest.useFakeTimers();
-      const promise = helper.sendOrder(dummyRequest);
-      jest.advanceTimersByTime(30000);
-      await expect(promise).rejects.toThrow("RFQ timeout");
-    });
+    await expect(quotePromise).resolves.toEqual({ bucket, quote: quotePayload });
   });
 
-  describe("onOrderUpdate", () => {
-    it("binds and unbinds the 'rfq-update' event", () => {
-      const callback = jest.fn();
-      const unsubscribe = helper.onOrderUpdate(callback);
+  it("rejects when an RFQ error is emitted", async () => {
+    const helper = new iLayerRfqHelper(helperOptions);
 
-      expect(mockChannel.bind).toHaveBeenCalledWith("rfq-update", callback);
-      // Call the returned unbind function
-      unsubscribe();
-      expect(mockChannel.unbind).toHaveBeenCalledWith("rfq-update", callback);
-    });
+    const quotePromise = helper.requestQuote(baseRequest, { timeoutMs: 1000 });
+
+    await Promise.resolve();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const broadcast = channels.get("private-rfq.broadcast")!;
+    const [, requestPayload] = broadcast.trigger.mock.calls[0];
+    const bucket = (requestPayload as { bucket: string }).bucket;
+    const reply = channels.get(`private-rfq.${bucket}`)!;
+
+    reply.emit("client-rfq.error", { code: "FAIL", message: "boom" });
+
+    await expect(quotePromise).rejects.toThrow("boom");
   });
 
-  it("disconnect calls pusher.disconnect", () => {
+  it("disconnect forwards to the underlying pusher instance", () => {
+    const helper = new iLayerRfqHelper(helperOptions);
     helper.disconnect();
-    expect(mockDisconnect).toHaveBeenCalled();
+    expect(disconnectMock).toHaveBeenCalled();
   });
 });

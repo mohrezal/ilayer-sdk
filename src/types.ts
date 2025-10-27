@@ -36,6 +36,9 @@ export type OrderRequest = {
 };
 
 export type RfqRequest = {
+  /**
+   * @deprecated Legacy RFQ request structure. Prefer {@link RfqQuoteRequestPayload}.
+   */
   id: string;
   user: `0x${string}`;
   recipient: `0x${string}`;
@@ -51,5 +54,51 @@ export type RfqRequest = {
 };
 
 export type RfqResponse = Order & {
+  /**
+   * @deprecated Legacy RFQ response structure. Prefer {@link RfqQuoteResponsePayload}.
+   */
   id: string;
+};
+
+export type RfqTokenAmountInput = {
+  address: string;
+  amount: string | number | bigint;
+};
+
+export type RfqLegRequest = {
+  network: string;
+  tokens: RfqTokenAmountInput[];
+};
+
+export type RfqTokenAmountQuote = {
+  address: string;
+  amount: number;
+};
+
+export type RfqLegQuote = {
+  network: string;
+  tokens: RfqTokenAmountQuote[];
+};
+
+export type RfqQuoteRequestPayload = {
+  bucket?: string;
+  from: RfqLegRequest;
+  to: RfqLegRequest;
+};
+
+export type RfqQuoteResponsePayload = {
+  solver: string;
+  from: RfqLegQuote;
+  to: RfqLegQuote;
+};
+
+export type RfqStatusPayload = {
+  stage: string;
+  note?: string;
+};
+
+export type RfqErrorPayload = {
+  code: string;
+  message: string;
+  solverId?: string;
 };
