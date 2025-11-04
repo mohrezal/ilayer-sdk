@@ -48,7 +48,7 @@ const main = async () => {
   console.log('Publishing RFQ request:', JSON.stringify(request, null, 2));
 
   try {
-    const { bucket, quote } = await helper.requestQuote(request, {
+    const { bucket, quotes } = await helper.requestQuote(request, {
       onStatus: (status) =>
         console.log('[status]', JSON.stringify(status, null, 2)),
       onError: (error) =>
@@ -56,7 +56,7 @@ const main = async () => {
     });
 
     console.log('Bucket ID:', bucket);
-    console.log('Quote:', JSON.stringify(quote, null, 2));
+    console.log('Quotes:', JSON.stringify(quotes, null, 2));
   } catch (error) {
     console.error(
       'RFQ failed:',

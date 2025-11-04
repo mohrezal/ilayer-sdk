@@ -86,11 +86,29 @@ export type RfqQuoteRequestPayload = {
   to: RfqLegRequest;
 };
 
-export type RfqQuoteResponsePayload = {
-  solver: string;
-  from: RfqLegQuote;
-  to: RfqLegQuote;
+export type QuoteTag = "FASTEST" | "BEST RETURN" | "NONE";
+
+export type QuoteRoute = {
+  id: string;
+  name: string;
 };
+
+export type Quote = {
+  id: string;
+  receiveAmount: number;
+  usdValue: number;
+  priceImpact: number;
+  conversionRate: number;
+  gasFeeUsd: number;
+  estimatedTime: number;
+  tag: QuoteTag;
+  route: QuoteRoute;
+  source: string;
+  destination: string;
+  usdtDestinationAmount: number;
+};
+
+export type RfqQuoteResponsePayload = Quote[];
 
 export type RfqStatusPayload = {
   stage: string;

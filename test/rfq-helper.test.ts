@@ -112,24 +112,32 @@ describe("iLayerRfqHelper", () => {
     const reply = channels.get(`private-rfq.${bucket}`);
     expect(reply).toBeDefined();
 
-    const quotePayload: RfqQuoteResponsePayload = {
-      solver: "solver-bot",
-      from: {
-        network: "Arbitrum",
-        tokens: [{ address: "0xfrom", amount: 12345 }],
+    const quotePayload: RfqQuoteResponsePayload = [
+      {
+        id: `${bucket}:solver-bot`,
+        receiveAmount: 123.45,
+        usdValue: 123.45,
+        priceImpact: 0,
+        conversionRate: 2.5,
+        gasFeeUsd: 0.5,
+        estimatedTime: 1_700_000_000,
+        tag: "NONE",
+        route: {
+          id: "solver-bot",
+          name: "Solver Bot",
+        },
       },
-      to: {
-        network: "Base",
-        tokens: [{ address: "0xto", amount: 6789 }],
-      },
-    };
+    ];
 
     reply!.emit("client-rfq.status", { stage: "quoting" });
     expect(statusSpy).toHaveBeenCalledWith({ stage: "quoting" });
 
     reply!.emit("client-rfq.quote", quotePayload);
 
-    await expect(quotePromise).resolves.toEqual({ bucket, quote: quotePayload });
+    await expect(quotePromise).resolves.toEqual({
+      bucket,
+      quotes: quotePayload,
+    });
   });
 
   it("rejects when an RFQ error is emitted", async () => {

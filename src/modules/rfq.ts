@@ -16,7 +16,7 @@ export type RfqRequestOptions = {
 
 export type RfqQuoteResult = {
   bucket: string;
-  quote: RfqQuoteResponsePayload;
+  quotes: RfqQuoteResponsePayload;
 };
 
 export type iLayerRfqHelperOptions = {
@@ -160,9 +160,9 @@ export class iLayerRfqHelper {
         rejectWithError(new Error(error.message));
       };
 
-      const quoteHandler = (quote: RfqQuoteResponsePayload) => {
+      const quoteHandler = (quotes: RfqQuoteResponsePayload) => {
         cleanup();
-        resolve({ bucket, quote });
+        resolve({ bucket, quotes });
       };
 
       const timer = setTimeout(() => {
@@ -184,7 +184,7 @@ export class iLayerRfqHelper {
     bucket: string,
     handlers: {
       status?: (status: RfqStatusPayload) => void;
-      quote?: (quote: RfqQuoteResponsePayload) => void;
+      quote?: (quotes: RfqQuoteResponsePayload) => void;
       error?: (error: RfqErrorPayload) => void;
     },
   ): () => void {
