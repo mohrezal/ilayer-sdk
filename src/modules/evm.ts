@@ -3,6 +3,7 @@ import {
   encodeFunctionData,
   pad,
   parseAbiParameters,
+  type Hex,
 } from "viem";
 import { Order, OrderRequest, Type } from "../types";
 import { HUB_ABI } from "../abi/hub";
@@ -145,5 +146,130 @@ export class iLayerContractHelper {
     ]);
 
     return { payload, options };
+  }
+
+  /**
+   * Submit a gasless order to the solver bot
+   *
+   * @param orderRequest - The order request with all order details
+   * @param signature - EIP-712 signature from the user
+   * @param orderId - Unique order ID (bytes32 hash)
+   * @param botEndpoint - Bot API endpoint URL (e.g., 'https://bot.example.com')
+   * @returns Promise with transaction hash and order ID
+   *
+   * @throws {Error} If the bot rejects the order or network request fails
+   *
+   * @remarks
+   * This method submits an order to the solver bot for gasless execution.
+   * The bot will validate the signature, check the quote, and submit the
+   * order on-chain paying gas on behalf of the user.
+   *
+   * The user must have previously received a quote from the bot via RFQ,
+   * and the order amounts must match the quote within tolerance.
+   *
+   * @example
+   * ```typescript
+   * const contractHelper = new iLayerContractHelper();
+   * const signingHelper = new iLayerSigningHelper();
+   *
+   * // 1. Get quote via RFQ
+   * const quote = await rfqHelper.requestQuote({...});
+   *
+   * // 2. Build order request from quote
+   * const orderRequest = {
+   *   nonce: 1,
+   *   deadline: Math.floor(Date.now() / 1000) + 3600,
+   *   order: {
+   *     // ... order fields from quote
+   *   },
+   * };
+   *
+   * // 3. Sign order
+   * const signature = await signingHelper.signOrderRequest(
+   *   orderRequest,
+   *   walletClient,
+   *   1,
+   *   orderHubAddress,
+   * );
+   *
+   * // 4. Generate order ID
+   * const orderId = signingHelper.generateOrderId(orderRequest);
+   *
+   * // 5. Submit gasless
+   * const result = await contractHelper.submitOrderGasless(
+   *   orderRequest,
+   *   signature,
+   *   orderId,
+   *   'https://bot.example.com',
+   * );
+   *
+   * console.log('Order submitted:', result.txHash);
+   * ```
+   */
+  async submitOrderGasless(
+    orderRequest: OrderRequest,
+    signature: Hex,
+    orderId: Hex,
+    botEndpoint: string,
+  ): Promise<{
+    success: boolean;
+    txHash: string;
+    orderId: string;
+  }> {
+    try {
+      // Validate inputs
+      if (!signature.startsWith("0x") || signature.length !== 132) {
+        throw new Error("Invalid signature format (expected 65 bytes hex)");
+      }
+
+      if (!orderId.startsWith("0x") || orderId.length !== 66) {
+        throw new Error("Invalid orderId format (expected 32 bytes hex)");
+      }
+
+      // Normalize bot endpoint URL
+      const endpoint = botEndpoint.endsWith("/")
+        ? botEndpoint.slice(0, -1)
+        : botEndpoint;
+
+      // Submit to bot API
+      const response = await fetch(`${endpoint}/order-creation/createOrderGasless`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          order: orderRequest.order,
+          signature,
+          orderId,
+          nonce: orderRequest.nonce,
+          requestDeadline: orderRequest.deadline,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `Bot rejected order (${response.status}): ${errorText}`,
+        );
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(
+          `Order submission failed: ${result.error || "Unknown error"}`,
+        );
+      }
+
+      return {
+        success: true,
+        txHash: result.txHash,
+        orderId: result.orderId,
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      throw new Error(`Failed to submit gasless order: ${errorMessage}`);
+    }
   }
 }
