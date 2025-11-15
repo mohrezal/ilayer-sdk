@@ -237,13 +237,17 @@ export class iLayerContractHelper {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          order: orderRequest.order,
-          signature,
-          orderId,
-          nonce: orderRequest.nonce,
-          requestDeadline: orderRequest.deadline,
-        }),
+        body: JSON.stringify(
+          {
+            order: orderRequest.order,
+            signature,
+            orderId,
+            nonce: orderRequest.nonce,
+            requestDeadline: orderRequest.deadline,
+          },
+          // Convert BigInt to string for JSON serialization
+          (_key, value) => (typeof value === "bigint" ? BigInt(value).toString() : value),
+        ),
       });
 
       if (!response.ok) {
