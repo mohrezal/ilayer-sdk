@@ -1,5 +1,6 @@
-import type { Address, Hex, WalletClient } from 'viem';
-import { keccak256, concat, encodePacked } from 'viem';
+import type { Address, Hex, WalletClient, Chain } from 'viem';
+import { keccak256, concat, encodePacked, createPublicClient, http } from 'viem';
+import { mainnet, arbitrum, base, bsc, polygon } from 'viem/chains';
 import type { OrderRequest } from '../types';
 
 /**
@@ -39,37 +40,49 @@ export class iLayerSigningHelper {
    * @returns The domain separator hash
    *
    * @remarks
-   * The domain separator is used to prevent signature replay across different
-   * contracts and chains. It's calculated as:
-   * keccak256(abi.encode(DOMAIN_TYPEHASH, name, version, chainId, verifyingContract))
+   * The domain separator is read directly from the OrderHub contract to ensure
+   * it matches exactly what the contract uses for signature validation.
    */
   private async getDomainSeparator(
     orderHubAddress: Address,
     chainId: number,
   ): Promise<Hex> {
-    // EIP-712 Domain type hash
-    const DOMAIN_TYPEHASH = keccak256(
-      encodePacked(
-        ['string'],
-        ['EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)'],
-      ),
-    );
+    // Map chain ID to viem chain config
+    const chainMap: Record<number, Chain> = {
+      1: mainnet,
+      8453: base,
+      42161: arbitrum,
+      56: bsc,
+      137: polygon,
+    };
 
-    const nameHash = keccak256(encodePacked(['string'], ['OrderHub']));
-    const versionHash = keccak256(encodePacked(['string'], ['1']));
+    const chain = chainMap[chainId];
+    if (!chain) {
+      throw new Error(`Unsupported chain ID: ${chainId}`);
+    }
 
-    // Encode domain separator
-    const domainSeparator = keccak256(
-      concat([
-        DOMAIN_TYPEHASH,
-        nameHash,
-        versionHash,
-        encodePacked(['uint256'], [BigInt(chainId)]),
-        encodePacked(['address'], [orderHubAddress]),
-      ]),
-    );
+    // Create public client to read from contract
+    const publicClient = createPublicClient({
+      chain,
+      transport: http(),
+    });
 
-    return domainSeparator;
+    // Read domain separator from contract
+    const domainSeparator = await publicClient.readContract({
+      address: orderHubAddress,
+      abi: [
+        {
+          name: 'domainSeparator',
+          type: 'function',
+          stateMutability: 'view',
+          inputs: [],
+          outputs: [{ type: 'bytes32' }],
+        },
+      ],
+      functionName: 'domainSeparator',
+    });
+
+    return domainSeparator as Hex;
   }
 
   /**
@@ -225,28 +238,89 @@ export class iLayerSigningHelper {
         throw new Error('Wallet client must have an account');
       }
 
-      // Get domain separator
-      const domainSeparator = await this.getDomainSeparator(
-        orderHubAddress,
-        chainId,
-      );
+      // Map chain ID to viem chain config
+      const chainMap: Record<number, Chain> = {
+        1: mainnet,
+        8453: base,
+        42161: arbitrum,
+        56: bsc,
+        137: polygon,
+      };
 
-      // Hash the order request
-      const requestHash = this.hashOrderRequest(orderRequest);
+      const chain = chainMap[chainId];
+      if (!chain) {
+        throw new Error(`Unsupported chain ID: ${chainId}`);
+      }
 
-      // Create EIP-712 digest: keccak256("\x19\x01" ‖ domainSeparator ‖ hashStruct(message))
-      const digest = keccak256(
-        concat([
-          '0x1901' as Hex,
-          domainSeparator,
-          requestHash,
-        ]),
-      );
+      console.log(`[SDK] ChainId: ${chainId}, OrderHub: ${orderHubAddress}`);
 
-      // Sign the digest
-      const signature = await walletClient.signMessage({
+      // Use signTypedData for proper EIP-712 signing
+      const signature = await walletClient.signTypedData({
         account: walletClient.account,
-        message: { raw: digest },
+        domain: {
+          name: 'iLayer',
+          version: '1',
+          chainId: BigInt(chainId),
+          verifyingContract: orderHubAddress,
+        },
+        types: {
+          OrderRequest: [
+            { name: 'deadline', type: 'uint64' },
+            { name: 'nonce', type: 'uint64' },
+            { name: 'order', type: 'Order' },
+          ],
+          Order: [
+            { name: 'user', type: 'bytes32' },
+            { name: 'recipient', type: 'bytes32' },
+            { name: 'filler', type: 'bytes32' },
+            { name: 'inputs', type: 'Token[]' },
+            { name: 'outputs', type: 'Token[]' },
+            { name: 'sourceChainId', type: 'uint32' },
+            { name: 'destinationChainId', type: 'uint32' },
+            { name: 'sponsored', type: 'bool' },
+            { name: 'primaryFillerDeadline', type: 'uint64' },
+            { name: 'deadline', type: 'uint64' },
+            { name: 'callRecipient', type: 'bytes32' },
+            { name: 'callData', type: 'bytes' },
+            { name: 'callValue', type: 'uint256' },
+          ],
+          Token: [
+            { name: 'tokenType', type: 'uint8' },
+            { name: 'tokenAddress', type: 'bytes32' },
+            { name: 'tokenId', type: 'uint256' },
+            { name: 'amount', type: 'uint256' },
+          ],
+        },
+        primaryType: 'OrderRequest',
+        message: {
+          deadline: BigInt(orderRequest.deadline),
+          nonce: BigInt(orderRequest.nonce),
+          order: {
+            user: orderRequest.order.user,
+            recipient: orderRequest.order.recipient,
+            filler: orderRequest.order.filler,
+            inputs: orderRequest.order.inputs.map((input) => ({
+              tokenType: input.tokenType,
+              tokenAddress: input.tokenAddress,
+              tokenId: BigInt(input.tokenId),
+              amount: BigInt(input.amount),
+            })),
+            outputs: orderRequest.order.outputs.map((output) => ({
+              tokenType: output.tokenType,
+              tokenAddress: output.tokenAddress,
+              tokenId: BigInt(output.tokenId),
+              amount: BigInt(output.amount),
+            })),
+            sourceChainId: orderRequest.order.sourceChainId,
+            destinationChainId: orderRequest.order.destinationChainId,
+            sponsored: orderRequest.order.sponsored,
+            primaryFillerDeadline: BigInt(orderRequest.order.primaryFillerDeadline),
+            deadline: BigInt(orderRequest.order.deadline),
+            callRecipient: orderRequest.order.callRecipient,
+            callData: orderRequest.order.callData,
+            callValue: BigInt(orderRequest.order.callValue),
+          },
+        },
       });
 
       return signature;
