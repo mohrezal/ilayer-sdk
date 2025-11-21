@@ -5,11 +5,10 @@
     "esModuleInterop": true,
     "strictNullChecks": true,
     "target": "ES2022",
-    "moduleResolution": "Node10",
-    "module": "CommonJS",
+    "moduleResolution": "bundler",
+    "module": "esnext",
     "declaration": true,
     "isolatedModules": true,
-    "noEmit": true,
     "outDir": "dist"
   },
   "include": ["src", "test"],
