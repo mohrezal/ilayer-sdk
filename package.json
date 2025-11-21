@@ -31,6 +31,9 @@
     "tsup": "^8.1.0",
     "typescript": "^5.4.5"
   },
+  "peerDependencies": {
+    "viem": "^2.x.x"
+  },
   "dependencies": {
     "@layerzerolabs/lz-v2-utilities": "^3.0.120",
     "pusher-js": "^8.4.0",
