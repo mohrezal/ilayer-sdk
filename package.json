@@ -44,6 +44,8 @@
   },
   "dependencies": {
     "@layerzerolabs/lz-v2-utilities": "^3.0.120",
+    "@types/fs-extra": "^11.0.4",
+    "fs-extra": "^11.3.2",
     "pusher-js": "^8.4.0"
   }
 }
