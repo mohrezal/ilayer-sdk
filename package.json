@@ -1,13 +1,13 @@
 {
   "name": "@ilayer/sdk",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "iLayer sdk",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
-  "homepage": "",
   "scripts": {
     "build": "tsup",
+    "prepare": "npm run build",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
@@ -15,13 +15,21 @@
     "format": "prettier -w .",
     "demo:rfq": "ts-node scripts/rfq-demo.ts"
   },
-  "author": "iLayer",
-  "keywords": [
-    "iLayer",
-    "rfq",
-    "order",
-    "sdk"
+  "files": [
+    "dist",
+    "abi",
+    "src",
+    "README.md"
   ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./*": "./dist/*",
+    "./abi/*": "./dist/abi/*.js"
+  },
+  "author": "iLayer",
   "license": "MIT",
   "devDependencies": {
     "@types/jest": "^29.5.14",
