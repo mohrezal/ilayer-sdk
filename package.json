@@ -37,8 +37,5 @@
   "dependencies": {
     "@layerzerolabs/lz-v2-utilities": "^3.0.120",
     "pusher-js": "^8.4.0"
-  },
-  "peerDependencies": {
-    "viem": "^2.39.3"
   }
 }
