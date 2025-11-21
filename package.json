@@ -4,9 +4,9 @@
   "author": "iLayer",
   "license": "MIT",
   "description": "iLayer sdk",
-  "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsup",
     "prepare": "npm run build",
@@ -27,16 +27,6 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
-    },
-    "./*": {
-      "types": "./dist/*.d.ts",
-      "import": "./dist/*.mjs",
-      "require": "./dist/*.js"
-    },
-    "./abi/*": {
-      "types": "./dist/abi/*.d.ts",
-      "import": "./dist/abi/*.mjs",
-      "require": "./dist/abi/*.js"
     }
   },
   "devDependencies": {
