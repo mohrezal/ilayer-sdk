@@ -1,6 +1,8 @@
 {
   "name": "@ilayer/sdk",
   "version": "0.0.4",
+  "author": "iLayer",
+  "license": "MIT",
   "description": "iLayer sdk",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -18,19 +20,25 @@
   "files": [
     "dist",
     "abi",
-    "src",
     "README.md"
   ],
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
     },
-    "./*": "./dist/*",
-    "./abi/*": "./dist/abi/*.js"
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.mjs",
+      "require": "./dist/*.js"
+    },
+    "./abi/*": {
+      "types": "./dist/abi/*.d.ts",
+      "import": "./dist/abi/*.mjs",
+      "require": "./dist/abi/*.js"
+    }
   },
-  "author": "iLayer",
-  "license": "MIT",
   "devDependencies": {
     "@types/jest": "^29.5.14",
     "jest": "^29.7.0",
