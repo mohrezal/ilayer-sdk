@@ -1,13 +1,18 @@
+// tsup.config.ts
 import { defineConfig } from "tsup";
-import fs from 'fs-extra'
+
 export default defineConfig({
+  entry: [
+    "src/index.ts",
+    "src/types.ts",
+    "src/constants.ts",
+    "src/modules/*/index.ts",
+    "src/abi/*.ts"
+  ],
   format: ["cjs", "esm"],
-  entry: ["./src/index.ts"],
   dts: true,
   shims: true,
   skipNodeModulesBundle: true,
-  clean: true,
-  onSuccess: async () => {
-    await fs.copy('src/abi', 'dist/abi')
-  }
+  treeshake: false,
+  clean: true
 });
