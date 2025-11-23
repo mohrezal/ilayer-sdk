@@ -6,6 +6,23 @@
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "homepage": "",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./abi/hub": {
+      "import": "./dist/abi/hub.mjs",
+      "require": "./dist/abi/hub.js",
+      "types": "./dist/abi/hub.d.ts"
+    },
+    "./abi/lzRouter": {
+      "import": "./dist/abi/lzRouter.mjs",
+      "require": "./dist/abi/lzRouter.js",
+      "types": "./dist/abi/lzRouter.d.ts"
+    }
+  },
   "scripts": {
     "build": "tsup",
     "test": "jest",
